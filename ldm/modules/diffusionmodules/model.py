@@ -31,6 +31,10 @@ def get_timestep_embedding(timesteps, embedding_dim):
     return emb
 
 
+def nonlinearity(x):
+    return silu(x)
+
+
 def Normalize(in_channels, num_groups=32):
     return torch.nn.GroupNorm(num_groups=num_groups, num_channels=in_channels, eps=1e-6, affine=True)
 
@@ -117,14 +121,14 @@ class ResnetBlock(nn.Module):
     def forward(self, x, temb):
         h = x
         h = self.norm1(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.conv1(h)
 
         if temb is not None:
-            h = h + self.temb_proj(silu(temb))[:,:,None,None]
+            h = h + self.temb_proj(nonlinearity(temb))[:,:,None,None]
 
         h = self.norm2(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.dropout(h)
         h = self.conv2(h)
 
@@ -319,7 +323,7 @@ class Model(nn.Module):
             assert t is not None
             temb = get_timestep_embedding(t, self.ch)
             temb = self.temb.dense[0](temb)
-            temb = silu(temb)
+            temb = nonlinearity(temb)
             temb = self.temb.dense[1](temb)
         else:
             temb = None
@@ -353,7 +357,7 @@ class Model(nn.Module):
 
         # end
         h = self.norm_out(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.conv_out(h)
         return h
 
@@ -450,7 +454,7 @@ class Encoder(nn.Module):
 
         # end
         h = self.norm_out(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.conv_out(h)
         return h
 
@@ -557,7 +561,7 @@ class Decoder(nn.Module):
             return h
 
         h = self.norm_out(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.conv_out(h)
         if self.tanh_out:
             h = torch.tanh(h)
@@ -595,7 +599,7 @@ class SimpleDecoder(nn.Module):
                 x = layer(x)
 
         h = self.norm_out(x)
-        h = silu(h)
+        h = nonlinearity(h)
         x = self.conv_out(h)
         return x
 
@@ -643,7 +647,7 @@ class UpsampleDecoder(nn.Module):
             if i_level != self.num_resolutions - 1:
                 h = self.upsample_blocks[k](h)
         h = self.norm_out(h)
-        h = silu(h)
+        h = nonlinearity(h)
         h = self.conv_out(h)
         return h
 
@@ -819,7 +823,7 @@ class FirstStagePostProcessor(nn.Module):
         z_fs = self.encode_with_pretrained(x)
         z = self.proj_norm(z_fs)
         z = self.proj(z)
-        z = silu(z)
+        z = nonlinearity(z)
 
         for submodel, downmodel in zip(self.model,self.downsampler):
             z = submodel(z,temb=None)
